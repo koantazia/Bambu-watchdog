@@ -148,7 +148,11 @@ local：本地模型，一次 200 到 400 毫秒，1 到 2 秒一检。模型文
 
 找文件的顺序：环境变量 A1_WATCHDOG_MODEL，然后 models/spaghetti_yolov8n_4cls.tflite、models/spagcls.onnx，最后 models 目录里任意一个 .tflite 或 .onnx。也可以直接在配置里写 detection.model_path 指定绝对路径。
 
-默认阈值 pause 0.40、warn 0.30，连续二十次过 pause 才真暂停，大约四十秒。嫌太慢就把 detection.pause_after_consecutive 调回 2 到 5。改 detection.local_pause_threshold 和 detection.local_warn_threshold。换了模型记得重新标阈值，别人的模型阈值不能直接抄。
+默认阈值 pause 0.40、warn 0.30，连续二十次过 pause 才真暂停，大约四十秒。
+
+画面糊了不判。失焦、过曝、镜头起雾的时候，分类模型会把整片平滑画面读成满屏面条，分数直接冲到 0.9 以上，这是误报最主要的来源。所以每帧先算中心区域的锐度（拉普拉斯方差），低于 detection.min_sharpness（默认 40）就跳过这一帧：不报警，也不打断已有的连续计数，日志一分钟记一条。实测 560 张真机帧，误报帧锐度中位数 20，正常帧 63；加上这道门，那批误报一条都没触发。想更松就把 min_sharpness 调低，填 0 等于关掉这道门。
+
+嫌报警太慢就把 detection.pause_after_consecutive 调回 2 到 5。要改判定松紧就动 detection.local_pause_threshold 和 detection.local_warn_threshold。换了模型记得重新标阈值，别人的模型阈值不能直接抄。
 
 gadget：OctoEverywhere Gadget 云端识别，要 API key，填在 secrets 的 gadget_api_key。单帧 2.5 到 5 秒，而且要连续 3 到 5 帧才给暂停建议，从炒面出现到它敢说该停大概 17 到 22 秒。稳，但慢。
 

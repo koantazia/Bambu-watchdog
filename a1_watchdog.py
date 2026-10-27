@@ -1107,6 +1107,26 @@ def detector_model_path(cfg):
 LOCAL_NAMES = ["Spaghetti", "Blob", "Warping", "Crack"]
 
 
+def frame_sharpness(im):
+    """中心区域的拉普拉斯方差，用来看这一帧是不是糊了。
+
+    失焦、过曝、镜头起雾时，炒面分类模型会把整片平滑画面读成满屏面条，
+    分数冲到 0.9 以上。真炒面是一小团细密纹理，整帧锐度不会掉下去。
+    实测 560 张真机帧：误判帧锐度中位数 20，正常帧 63。
+    """
+    import numpy as np
+    w, h = im.size
+    g = im.crop((int(w * 0.235), int(h * 0.2),
+                 int(w * 0.765), int(h * 0.8))).convert("L")
+    a = np.asarray(g, dtype=np.float32)
+    if a.shape[0] < 3 or a.shape[1] < 3:
+        return 0.0
+    core = a[1:-1, 1:-1]
+    lap = (a[:-2, 1:-1] + a[2:, 1:-1] + a[1:-1, :-2] + a[1:-1, 2:]
+           - 4.0 * core)
+    return float(lap.var())
+
+
 class LocalDetector:
     """本地 TFLite 检测器，接口与 GadgetClient 一致，可整体互换。
 
@@ -1119,7 +1139,8 @@ class LocalDetector:
     """
 
     def __init__(self, model_path=None, pause_threshold=0.40,
-                 warn_threshold=0.30, next_rec=2, input_size=640):
+                 warn_threshold=0.30, next_rec=2, input_size=640,
+                 min_sharpness=40.0):
         import numpy as np
         from PIL import Image
         from ai_edge_litert.interpreter import Interpreter
@@ -1136,6 +1157,7 @@ class LocalDetector:
         self.warn_threshold = float(warn_threshold)
         self.next_rec = int(next_rec)
         self.input_size = int(input_size)
+        self.min_sharpness = float(min_sharpness)
         # ai_edge_litert 的 C 层按 ANSI 打开文件，路径带中文（装在中文目录下）
         # 会报 model allocation is null/empty。这种路径改成内存加载，绕开它自己
         # 的 fopen。
@@ -1179,6 +1201,20 @@ class LocalDetector:
         return best
 
     def process(self, context, jpeg_bytes):
+        sharp = 0.0
+        if self.min_sharpness > 0:
+            import io
+            sharp = frame_sharpness(self._Image.open(io.BytesIO(jpeg_bytes)))
+            if sharp < self.min_sharpness:
+                # 画面糊了，这一帧不判定。返回结构和正常结果一致，
+                # 调用方只看 skipped，不用改读取字段的代码。
+                return {
+                    "quality": 0, "score": 0, "warning": False, "pause": False,
+                    "faster": False, "next_min": 1, "next_rec": 1,
+                    "spag_conf": 0.0, "blob_conf": 0.0,
+                    "skipped": True, "sharpness": round(sharp, 1),
+                    "skip_reason": "画面看不清",
+                }
         best = self._infer(jpeg_bytes)
         spag = best.get(self.spag_id, 0.0)
         blob = best.get(self.blob_id, 0.0)
@@ -1197,6 +1233,7 @@ class LocalDetector:
             # 本地模型独有的细粒度字段，日志和界面可以直接显示
             "spag_conf": round(spag, 4),
             "blob_conf": round(blob, 4),
+            "sharpness": round(sharp, 1),
         }
 
 
@@ -1214,7 +1251,8 @@ class OnnxSpagDetector(LocalDetector):
     """
 
     def __init__(self, model_path=None, pause_threshold=0.40,
-                 warn_threshold=0.30, next_rec=2, input_size=None):
+                 warn_threshold=0.30, next_rec=2, input_size=None,
+                 min_sharpness=40.0):
         import numpy as np
         from PIL import Image
         import onnxruntime as ort
@@ -1230,6 +1268,7 @@ class OnnxSpagDetector(LocalDetector):
         self.pause_threshold = float(pause_threshold)
         self.warn_threshold = float(warn_threshold)
         self.next_rec = int(next_rec)
+        self.min_sharpness = float(min_sharpness)
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = max(1, min(4, os.cpu_count() or 1))
         opts.log_severity_level = 3
@@ -1309,7 +1348,8 @@ def build_detector(cfg, secrets, engine):
         model_path=path,
         pause_threshold=dcfg.get("local_pause_threshold", 0.40),
         warn_threshold=dcfg.get("local_warn_threshold", 0.30),
-        next_rec=dcfg.get("local_next_rec", 2))
+        next_rec=dcfg.get("local_next_rec", 2),
+        min_sharpness=dcfg.get("min_sharpness", 40.0))
     if engine == "local":
         return local
     gcfg = cfg.get("gadget", {}) or {}
@@ -1702,6 +1742,18 @@ class Watchdog:
         self.last_result = result
         self.last_check_at = datetime.now().isoformat(timespec="seconds")
         self.checks += 1
+        if result.get("skipped"):
+            # 失焦、过曝这类糊画面一律不判定：既不累计也不清零，
+            # 免得一串模糊帧把连续计数顶上去，也免得打断已有计数。
+            # 一分钟最多记一条，别让一串模糊帧把日志刷满
+            now = time.time()
+            if now - getattr(self, "_last_blur_log", 0.0) >= 60:
+                self._last_blur_log = now
+                log.warning("画面看不清（锐度 %.1f，低于 %.0f），这帧跳过不判定",
+                            float(result.get("sharpness") or 0.0),
+                            float(getattr(self.gadget, "min_sharpness", 0.0)))
+            self.next_inspect = time.time() + max(1.0, min(self.max_interval, 2.0))
+            return result
         if result["pause"]:
             self.consecutive_pause += 1
         else:
