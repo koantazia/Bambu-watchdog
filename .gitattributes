@@ -1,0 +1,11 @@
+# 换行统一：代码和文档用 LF，bat 必须 CRLF 否则 cmd 解析出错
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.jpg binary
+*.onnx binary
+*.tflite binary

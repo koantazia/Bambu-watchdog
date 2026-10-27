@@ -1,0 +1,11 @@
+# 必需
+paho-mqtt>=2.0
+requests>=2.31
+
+# 只在 detection.engine=local 时需要
+numpy>=1.26
+pillow>=10.0
+# 模型是 .tflite 时装这个
+ai-edge-litert>=1.0
+# 模型是 .onnx 时装这个，二者装一个就够
+onnxruntime>=1.17

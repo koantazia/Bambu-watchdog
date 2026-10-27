@@ -1,0 +1,41 @@
+{
+  "_说明": "改完删掉所有 PUT_ 开头的值。这个文件不含密钥，可以发给人看。",
+  "printer": {
+    "serial": "PUT_PRINTER_SERIAL",
+    "ip": "PUT_PRINTER_IP",
+    "model": "A1",
+    "name": "我的A1"
+  },
+  "mqtt": {
+    "mode": "local",
+    "cloud_broker": "cn.mqtt.bambulab.com",
+    "cloud_user": "",
+    "cloud_secrets_path": ""
+  },
+  "detection": {
+    "engine": "local",
+    "min_interval_sec": 5,
+    "max_interval_sec": 60,
+    "pause_after_consecutive": 2,
+    "trend_enabled": true,
+    "local_pause_threshold": 0.4,
+    "local_warn_threshold": 0.3
+  },
+  "stream": {
+    "enabled": true,
+    "port": 8099
+  },
+  "alert": {
+    "popup": true,
+    "printer_error": true,
+    "allow_pause": false
+  },
+  "push": {
+    "enabled": false,
+    "type": "pushplus",
+    "key": "",
+    "uids": [],
+    "min_interval_sec": 60,
+    "timeout_sec": 8
+  }
+}
