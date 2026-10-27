@@ -1,44 +1,23 @@
-# 打印工作台 / a1-watchdog
+Print Workbench / a1-watchdog
+A small tool that watches your 3D printer for you. Once installed, it has four pages:
 
-一个替人盯着 3D 打印机干活的小工具。装上之后有四个页面：
+History ledger: who printed, how long it took, and whether it succeeded or failed—all recorded
 
-- 历史台账：谁打的、打了多久、成功还是失败，全记账
-- 实时状态：喷头温度、进度、还剩多久
-- 耗材库存：每卷剩多少克，快没了提前提醒
-- 炒面监控：抓帧、判分、报警。人眼看着这一层能接受，点一下「这个程度可以接受」，程度上去了才重新提醒
+Real-time status: nozzle temperature, progress, and time remaining
 
-只想盯炒面、不想要工作台也行，仓库里这个看门狗脚本单独就跑得起来。
+Filament inventory: how many grams are left on each spool, with advance warnings when it’s running low
 
-## 两种用法
+Spaghetti failure monitoring: capture frames, score them, and alert. If the current layer looks acceptable to the human eye, click “This level is acceptable”; it will only alert again once the severity increases.
 
-不想碰命令行、不想装 Python 的：去 Releases 下安装包，双击装完就有上面四个页面。
 
-https://github.com/koantazia/Bambu-watchdog/releases/latest
+做了个工作台 四个页面：· 历史台账：谁打的、打了多久、成功还是失败，全记账 · 实时状态：喷头温度、进度、剩余时间 · 耗材库存：剩多少克，快没了提前提醒 
+· 炒面监控：抓帧、判分、报警，人眼看着能接受可以点一次（这个程度可以接）」，程度再上升才重新提醒
+开源版本用的开源模型 原理是给画面打分 分数高发出警告
+但是限于限制 只有局域网模式才能有暂停权限
+但是局域网开了用不了拓竹APP 可以自己取舍一下
+全厂家打印机应该都能用
+不想用局域网可以自己接一个微信提示 炒面报警就行
 
-想自己跑、想改代码的：拉这个仓库，装依赖，按下面「装起来」走。
-
-安装包是 Windows 用的。源码跑起来要 Python 3.10 以上。
-
-## 炒面是怎么判出来的
-
-开源版用的是开源模型，原理很直白：把摄像头画面缩成一张小图，模型给一个炒面分数，分数过线就报警，顺手把那一帧存下来。
-
-分数别当成「有多大概率是炒面」来读，它就是个门槛，高低自己调。默认 0.40 报警、0.30 先提示，连续两帧过线才真报。换了模型记得重新标阈值，别人的阈值不能直接抄。
-
-报警之后看一眼，觉得这一层其实没事，点「这个程度可以接受」，这卷料就不再打扰你。只有程度明显又上去了，才会再提醒一次。
-
-## 关于暂停，得先说清楚
-
-拓竹从固件 01.08 开始给控制类指令加了授权校验（RSA 加 X.509 证书签名）。没有官方签名的暂停、启动命令会被打印机拒绝，回 HMS 0500_0500_0001_0007、err_code 0x05024007。第三方软件都卡在这一步，不是这里没做好。
-
-目前能正常拿到暂停的办法只有一个：打印机开「局域网模式」、拿到访问码，走局域网 MQTT 直连。代价是开了局域网模式，拓竹官方 App 和云服务就一起用不了了。
-
-所以这个取舍自己拿：
-
-- 平时靠官方 App 远程看、远程停：那就别开局域网模式，这个工具只弹窗、只推微信，该停的时候你自己按一下
-- 想让它能替你按下暂停：开局域网模式，接受官方 App 用不了
-
-默认配置是只看不控。想试自动暂停，把 alert.allow_pause 设成 true，并且先确认固件在 01.07.x 这种还没有校验的版本。风险自负。
 
 ## 支持哪些机器
 
