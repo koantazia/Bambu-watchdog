@@ -16,7 +16,7 @@
     "engine": "local",
     "min_interval_sec": 5,
     "max_interval_sec": 60,
-    "pause_after_consecutive": 2,
+    "pause_after_consecutive": 20,
     "trend_enabled": true,
     "local_pause_threshold": 0.4,
     "local_warn_threshold": 0.3

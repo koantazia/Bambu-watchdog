@@ -1500,15 +1500,16 @@ class Watchdog:
                 self.dry_run = True
                 self.detector_skip_reason = "本地检测模型不在：%s" % _mp
         # 连续几帧说"该暂停"才真暂停。默认值按引擎区分：
-        #   local  → 2：本地模型单帧就可能抖到阈值上方（2026-10-24 满底板健康打印
-        #            0.13 到 0.29 的假阳性），而且轻微炒面常常能自修复，
-        #            单帧高分不急着停，要它连续存在才动手。每 2s 一检，2 帧也就 4 秒。
+        #   local  → 20：本地模型单帧就可能误判，底座纹理、亮面、大块同色都能把
+        #            分数顶过阈值，有时候只闪一两帧。要它连续二十次都判异常才认，
+        #            每 2s 一检差不多 40 秒，真炒面撑得住这么久的观察。
+        #            嫌迟钝就把 detection.pause_after_consecutive 调小（1 到 5 之间）。
         #   gadget → 1：Gadget 自己就是「图像分类 + 时序模型」，单帧异常只会压低
         #            质量分，要连续 3~4 帧才给 WarningSuggested、4~5 帧才给
         #            PauseSuggested，外面再套一层是重复门禁，只会白白推迟暂停。
         # 想覆盖默认就在配置里显式写 pause_after_consecutive。
         self.pause_after = int(det.get(
-            "pause_after_consecutive", 2 if self.engine == "local" else 1))
+            "pause_after_consecutive", 20 if self.engine == "local" else 1))
         # 是否允许本程序向打印机发控制命令（目前只有 pause 一条）。
         # 默认 False：本软件的定位是监控与报警，控制权不在这里。原因见
         # 文件头「本软件不发送任何控制命令」与 README「关于自动暂停」。
@@ -1529,7 +1530,9 @@ class Watchdog:
         self.trend_slope_per_min = float(det.get("trend_slope_per_min", 20.0))
         self.trend_min_score = float(det.get("trend_min_score", 40.0))
         self.trend_min_points = int(det.get("trend_min_points", 6))
-        self.trend_hold = int(det.get("trend_hold", 3))
+        # 趋势线也要连续够久才动手：单帧抖动加两个点就能凑出斜率，
+        # 门槛跟阈值线对齐到 20 次，两条线都不容易靠噪声触发。
+        self.trend_hold = int(det.get("trend_hold", 20))
         self._trend_hist = []
         self._score_ema = None
         self.consecutive_escalation = 0
