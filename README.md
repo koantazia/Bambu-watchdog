@@ -148,7 +148,9 @@ local：本地模型，一次 200 到 400 毫秒，1 到 2 秒一检。模型文
 
 找文件的顺序：环境变量 A1_WATCHDOG_MODEL，然后 models/spaghetti_yolov8n_4cls.tflite、models/spagcls.onnx，最后 models 目录里任意一个 .tflite 或 .onnx。也可以直接在配置里写 detection.model_path 指定绝对路径。
 
-默认阈值 pause 0.40、warn 0.30，连续二十次过 pause 才真暂停，大约四十秒。
+安装包里带的就是那套 4 类 tflite。只拉源码的话仓库里没有权重，得自己放，见下面「模型从哪来」。
+
+默认阈值 pause 0.30、warn 0.20，连续二十次过 pause 才真暂停，大约四十秒。这一组是配 tflite 那套 4 类模型标出来的：它的分数天生被压得低，560 张真机帧里最高只到 0.62，正常帧中位数 0.10。换成 .onnx 分类模型就把两个值抬到 0.40 和 0.30，那套模型判失焦画面很容易冲到 0.9。别人的模型不能直接抄这两个数，得自己拿真机帧重新标。
 
 画面糊了不判。失焦、过曝、镜头起雾的时候，分类模型会把整片平滑画面读成满屏面条，分数直接冲到 0.9 以上，这是误报最主要的来源。所以每帧先算中心区域的锐度（拉普拉斯方差），低于 detection.min_sharpness（默认 40）就跳过这一帧：不报警，也不打断已有的连续计数，日志一分钟记一条。实测 560 张真机帧，误报帧锐度中位数 20，正常帧 63；加上这道门，那批误报一条都没触发。想更松就把 min_sharpness 调低，填 0 等于关掉这道门。
 
@@ -167,9 +169,9 @@ both：两个都跑，任一报警就报。最吵，不建议。
 
 ## 模型从哪来
 
-仓库不带模型权重。一是体积（onnx 九兆、tflite 十几兆，进仓库每次 clone 都要拉），二是权重都是别人训练或转换的，授权未必允许跟着代码一起分发。
+仓库不带模型权重。一是体积（onnx 九兆、tflite 六兆，进仓库每次 clone 都要拉），二是权重都是别人训练或转换的，授权未必允许跟着代码一起分发。
 
-三条路。
+四条路。
 
 一是自己训。用 ultralytics 的 YOLOv8n-cls 在炒面数据集上训一个 2 分类（clean / spaghetti），导成 ONNX。训练集搜「3d printing spaghetti detection dataset」，Hugging Face 和 Kaggle 上都有现成的。1080p 上一帧大概 30 毫秒，够用。
 
@@ -182,6 +184,8 @@ yolo export model=你的模型.pt format=onnx imgsz=224
 出来的文件丢进 models 目录，改名叫 spagcls.onnx，或者直接用 detection.model_path 指过去。
 
 三是不训。detection.engine 改成 gadget，用 OctoEverywhere 的云端模型，只需要一个 API key，本地什么都不用装。慢一点，稳一点。
+
+四是直接用别人训好的 4 类检测权重。CookiezRGood/klipper-print-failure-detection 仓库里有 YOLOv8n 的 tflite，认 Spaghetti、Blob、Warping、Crack 四类，安装包里带的就是它。那个仓库没写许可证，权重版权归原作者，要用自己去原仓库取，别跟着代码再分发出去。
 
 放好模型跑一次自检，四项都打勾才算通：
 
